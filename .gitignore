@@ -1,0 +1,4 @@
+*.so
+*.dylib
+ifd-ctkbridge.bundle/
+.DS_Store

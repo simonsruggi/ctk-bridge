@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>en</string>
+	<key>CFBundleExecutable</key>
+	<string>libctkbridge.so</string>
+	<key>CFBundleIdentifier</key>
+	<string>com.ctkbridge.ifd</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>ifd-ctkbridge</string>
+	<key>CFBundlePackageType</key>
+	<string>BNDL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>1.0</string>
+	<key>CFBundleVersion</key>
+	<string>1</string>
+	<key>ifdCapabilities</key>
+	<string>0x00000000</string>
+	<key>ifdFriendlyName</key>
+	<string>CryptoTokenKit Bridge Reader</string>
+	<key>ifdManufacturerString</key>
+	<string>CTKBridge</string>
+	<key>ifdProductID</key>
+	<string>0x0001</string>
+	<key>ifdProductString</key>
+	<string>CryptoTokenKit to PCSC Bridge</string>
+	<key>ifdProtocolSupport</key>
+	<string>0x00000003</string>
+	<key>ifdVendorID</key>
+	<string>0x0001</string>
+	<key>ifdVersionNumber</key>
+	<string>0x00010000</string>
+</dict>
+</plist>
