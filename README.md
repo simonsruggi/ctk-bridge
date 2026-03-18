@@ -4,34 +4,40 @@ Bridge PCSC per risolvere l'errore **"CKR_FUNCTION_FAILED, rimuovere e reinserir
 
 ## Il problema
 
-Su macOS 15+ (Sequoia), InfoCamere Sign Desktop non riesce a firmare documenti con smartcard CNS (es. NXP JCOP-4, carte Camera di Commercio). L'errore mostrato e':
+Quando firmi un PDF con **InfoCamere Sign Desktop** su macOS 15 (Sequoia), esce:
 
 > Errore Smartcard: CKR_FUNCTION_FAILED, rimuovere e reinserire la carta
 
-### Causa root
+La carta funziona, il lettore funziona, i certificati si vedono in Area personale. Ma la firma fallisce.
 
-macOS gestisce i lettori smartcard USB tramite due sistemi:
+### Perche' succede
 
-1. **CryptoTokenKit** (moderno, nativo macOS) - gestito da `usbsmartcardreaderd`
-2. **PC/SC** (legacy, cross-platform) - usato da Sign Desktop
+macOS ha **due sistemi** per parlare con le smartcard:
 
-Il driver **bit4id** (`ifd-libifdvirtual.bundle`) dovrebbe fare da ponte tra i due sistemi, ma e' compilato per **macOS 10.12 (Sierra)** con Xcode 8.1 (2016-2017). Su macOS 15+ le connessioni XPC vengono invalidate immediatamente, impedendo al bridge di funzionare.
+- **CryptoTokenKit** — il sistema moderno di Apple. Quando inserisci il lettore USB, macOS lo "cattura" con `usbsmartcardreaderd` e lo rende disponibile solo tramite CryptoTokenKit.
+- **PC/SC** — il sistema legacy, standard cross-platform. E' quello che Sign Desktop usa internamente per comunicare con la carta.
 
-**Risultato**: CryptoTokenKit vede la carta (i certificati appaiono in Area personale), ma Sign Desktop usa PCSC e non la raggiunge.
+Il problema e' che **Sign Desktop usa PC/SC, ma macOS espone il lettore solo tramite CryptoTokenKit**. I due sistemi non si parlano.
+
+Per risolvere questo, bit4id (il fornitore del driver) installa un **bridge**: un lettore virtuale (`ifd-libifdvirtual.bundle`) che dovrebbe prendere la carta dal lettore fisico (via CryptoTokenKit) e presentarla a PC/SC come se fosse un lettore locale.
+
+**Ma questo bridge e' compilato per macOS 10.12 (Sierra), del 2016.** Le API XPC di comunicazione inter-processo sono cambiate radicalmente da allora. Su macOS 15 la connessione viene aperta e immediatamente chiusa, in loop ogni 3 secondi. Il lettore virtuale resta vuoto, Sign Desktop non vede la carta, e la firma fallisce.
 
 ```
-Carta smartcard (NXP JCOP-4)
+Carta NXP JCOP-4
     |
 Lettore USB fisico
     |
-CryptoTokenKit (macOS)     <-- FUNZIONA
+CryptoTokenKit (macOS)      ✅ funziona
     |
-Bridge bit4id (2016)       <-- ROTTO su macOS 15+
+Bridge bit4id (2016)         ❌ rotto su macOS 15+
     |
 PC/SC
     |
-Sign Desktop               <-- non riceve la carta
+Sign Desktop                 ❌ non riceve la carta
 ```
+
+InfoCamere distribuisce ancora questo driver obsoleto nella versione piu' recente di Sign Desktop.
 
 ## Diagnosi
 
@@ -79,7 +85,26 @@ com.apple.ifdreader: [com.apple.xpc:connection] invalidated because the client p
 
 ## Soluzione: CTKBridge
 
-CTKBridge e' un nuovo driver IFD handler che sostituisce il bridge rotto di bit4id. Usa le API moderne di CryptoTokenKit per accedere al lettore fisico e lo espone come lettore virtuale PCSC.
+CTKBridge e' un nuovo driver IFD handler scritto in Objective-C che sostituisce il bridge rotto di bit4id. Usa le API moderne di CryptoTokenKit per:
+
+1. Trovare il lettore fisico (escludendo i lettori virtuali)
+2. Aprire una sessione con la smartcard
+3. Esporsi come lettore virtuale PC/SC ("CryptoTokenKit Bridge Reader")
+4. Inoltrare tutti i comandi APDU da PC/SC alla carta via CryptoTokenKit
+
+```
+Carta NXP JCOP-4
+    |
+Lettore USB fisico
+    |
+CryptoTokenKit (macOS)      ✅ funziona
+    |
+CTKBridge (nuovo)            ✅ API moderne macOS 13+
+    |
+PC/SC
+    |
+Sign Desktop                 ✅ vede la carta
+```
 
 ### Requisiti
 
@@ -133,10 +158,13 @@ sudo mv /usr/local/libexec/SmartCardServices/drivers/ifd-libifdvirtual.bundle.di
 sudo killall com.apple.ifdreader com.apple.ctkpcscd 2>/dev/null
 ```
 
+## Alternativa immediata
+
+Se il bridge non funziona (es. per code signing), puoi usare **[DiKe 6](https://www.firma.infocert.it/installazione/installazione_DiKe6.php)** (gratuito, di InfoCert). DiKe usa CryptoTokenKit direttamente e bypassa PC/SC, quindi non ha questo problema.
+
 ## Note
 
 - **Code signing**: macOS potrebbe rifiutare il caricamento di driver non firmati. In tal caso, potrebbe essere necessario disabilitare temporaneamente SIP o firmare il bundle con un certificato sviluppatore.
-- **Alternativa immediata**: Se il bridge non funziona, [DiKe 6](https://www.firma.infocert.it/installazione/installazione_DiKe6.php) (gratuito, di InfoCert) usa CryptoTokenKit direttamente e bypassa PCSC.
 - Questo progetto non e' affiliato a InfoCamere, bit4id o InfoCert.
 
 ## Dispositivi testati
